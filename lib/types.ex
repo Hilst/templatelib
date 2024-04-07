@@ -32,11 +32,6 @@ defmodule Templatelib.Types do
     def new(:mask), do: new("mask", :mask)
   end
 
-  defimpl String.Chars, for: Token do
-    alias Templatelib.Types.Token
-    def to_string(%Token{type: type, literal: literal}), do: "#{type}>#{literal}"
-  end
-
   defmodule AST do
     alias Templatelib.Types.AST.ASTNode
     defstruct nodes: []
@@ -45,24 +40,6 @@ defmodule Templatelib.Types do
     defmodule ASTNode do
       defstruct tokens: [], nodes: []
       @type t :: %ASTNode{tokens: [Token.t()], nodes: [ASTNode.t()]}
-    end
-
-    defimpl String.Chars, for: ASTNode do
-      def to_string(%ASTNode{tokens: tokens, nodes: nodes}) do
-        "
-        AST NODE:
-        |> tokens: [#{Enum.join(tokens, ", ")}]
-        |> nodes: [#{Enum.join(nodes, ", ")}]
-        "
-      end
-    end
-  end
-
-  defimpl String.Chars, for: AST do
-    def to_string(%AST{nodes: nodes}) do
-      "AST:
-      |> nodes: [#{Enum.join(nodes, ", ")}]
-      "
     end
   end
 end

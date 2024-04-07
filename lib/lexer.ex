@@ -17,94 +17,76 @@ defmodule Templatelib.Lexer do
 
   defguardp is_digit(c) when c in ?0..?9
 
-  @doc """
-  Tokenize an input text into template tokens code with {{ }} delimiters
+  @type next_type :: :peek | :pop
+  defguardp is_next_type(t) when t == :peek or t == :pop
+  # NEXT PUBIC INTERFACE
+  @spec next(input :: String.t(), type :: next_type(), inside_delimiter :: boolean(), deepth :: integer()) ::
+          {[Token.t()], rest :: String.t(), inside_deleimiter :: boolean()}
+  def next(input, next_type, inside \\ false, n \\ 1)
+      when is_binary(input) and is_next_type(next_type) and is_integer(n),
+      do: next(input, next_type, n, [], input, inside)
 
-  ## Example
-
-    iex> Templatelib.Lexer.run_lexer("<p>This {{ /get/from/path/thing | mask uppercase }} is nice!</p>")
-    [
-      {:ident, "<p>This "},
-      :ldsquirly,
-      :slash,
-      {:ident, "get"},
-      :slash,
-      {:ident, "from"},
-      :slash,
-      {:ident, "path"},
-      :slash,
-      {:ident, "thing"},
-      :pipe,
-      :mask,
-      {:ident, "uppercase"},
-      :rsquirly,
-      {:ident, "is nice!</p>"},
-      :eof
-    ]
-  """
-
-  @spec run_lexer(String.t()) :: [Token.t()]
-  def run_lexer(input) when is_binary(input) do
-    lex(input, [], false)
-  end
-
-  @spec lex(input :: String.t(), [Token.t()], inside_dsquirly :: boolean()) :: [Token.t()]
-  # Empty input stop with tokens + eof
-  defp lex(<<>>, tokens, _) do
-    [:eof | tokens] |> Enum.reverse()
-  end
-
-  defp lex(input, tokens, false) do
-    case read_until_open(input, <<>>) do
-      {token, <<>>, _} -> lex(<<>>, [token | tokens], false)
-      {token, rest, true} -> lex(rest, [token | tokens], true)
-      _ -> lex(<<>>, tokens, false)
+  # NEXT CALC
+  @spec next(
+          input :: String.t(),
+          type :: next_type(),
+          deepth :: integer(),
+          tokens :: [Token.t()],
+          rest :: String.t(),
+          inside :: boolean()
+        ) :: {[Token.t()], rest :: String.t(), inside_del :: boolean()}
+  # NEXT RETURN
+  defp next(input, next_type, _, [%Token{type: :eof, literal: _} | _] = tokens, rest, inside) when is_next_type(next_type) and is_boolean(inside) do
+    returned_rest = case next_type do
+      :peek -> input
+      :pop -> rest
     end
+    {tokens, returned_rest, inside}
+  end
+  defp next(input, :peek, 0, tokens, _rest, inside), do: {tokens, input, inside}
+  defp next(_input, :pop, 0, tokens, rest, inside), do: {tokens, rest, inside}
+
+  # NEXT CALC
+  defp next(input, type, n, tokens, in_rest, inside) do
+    {token, rest, entered_delimiter} = lex(in_rest, tokens, inside)
+    next(input, type, n - 1, [token | tokens], rest, entered_delimiter)
   end
 
-  # Ignore whitespaces
-  defp lex(<<c::8, rest::binary>>, tokens, true) when is_whitespace(c) do
-    lex(rest, tokens, true)
-  end
-
-  # Call tokenize apllication recursively
-  defp lex(input, tokens, true) do
-    {token, rest, stop} = tokenize(input)
-    lex(rest, [token | tokens], !stop)
-  end
+  # LEX CALC
+  @spec lex(input :: String.t(), tokens :: [Token.t()], inside_delimiter :: boolean()) :: {Token.t(), String.t(), boolean()}
+  # ANY POINT
+  defp lex(<<>>, _tokens, _inside), do: {Token.new(:eof), <<>>} # EOF CASE
+  # OUTSIDE DELIMITER
+  defp lex(input, _tokens, false) when is_binary(input), do: read_until_open(input, <<>>)
+  # INSIDE DELIMITER
+  defp lex(<<c::8, rest::binary>>, tokens, true) when is_whitespace(c), do: lex(rest, tokens, true) # WHITESPACES
+  defp lex(input, _tokens, true), do: tokenize(input) # TOKENIZATION
 
   @spec tokenize(input :: String.t()) :: {Token.t(), rest :: String.t(), stop :: boolean()}
-  defp tokenize(<<"{{", rest::binary>>), do: {Token.new(:ldsquirly), rest, false}
-  defp tokenize(<<"}}", rest::binary>>), do: {Token.new(:rdsquirly), rest, true}
-  defp tokenize(<<"/", rest::binary>>), do: {Token.new(:slash), rest, false}
-  defp tokenize(<<"|", rest::binary>>), do: {Token.new(:pipe), rest, false}
+  defp tokenize(<<"{{", rest::binary>>), do: {Token.new(:ldsquirly), rest, true}
+  defp tokenize(<<"}}", rest::binary>>), do: {Token.new(:rdsquirly), rest, false}
+  defp tokenize(<<"/", rest::binary>>), do: {Token.new(:slash), rest, true}
+  defp tokenize(<<"|", rest::binary>>), do: {Token.new(:pipe), rest, true}
   defp tokenize(<<c::8, rest::binary>>) when is_letter(c), do: read_ident(rest, <<c>>)
   defp tokenize(<<c::8, rest::binary>>) when is_digit(c), do: read_number(rest, <<c>>)
   defp tokenize(<<c::8, rest::binary>>), do: {Token.new(<<c>>, :illegal), rest}
 
-  @spec read_ident(String.t(), iodata()) :: {Token.t(), rest :: String.t(), false}
+  @spec read_ident(String.t(), iodata()) :: {Token.t(), rest :: String.t(), true}
   defp read_ident(<<c::8, rest::binary>>, acc) when is_letter(c),
     do: read_ident(rest, acc <> <<c>>)
 
-  defp read_ident(rest, acc), do: {IO.iodata_to_binary(acc) |> tokenize_word(), rest, false}
+  defp read_ident(rest, acc), do: {IO.iodata_to_binary(acc) |> tokenize_word(), rest, true}
 
   @spec tokenize_word(String.t()) :: Token.t()
   defp tokenize_word("mask"), do: Token.new(:mask)
   defp tokenize_word(ident), do: Token.new(ident, :ident)
 
-  @spec read_number(String.t(), iodata()) :: {Token.t(), rest :: String.t(), false}
-  defp read_number(<<c::8, rest::binary>>, acc) when is_digit(c),
-    do: read_number(rest, acc <> <<c>>)
+  @spec read_number(String.t(), iodata()) :: {Token.t(), rest :: String.t(), true}
+  defp read_number(<<c::8, rest::binary>>, acc) when is_digit(c), do: read_number(rest, acc <> <<c>>)
+  defp read_number(rest, acc), do: {IO.iodata_to_binary(acc) |> Token.new(:number), rest, true}
 
-  defp read_number(rest, acc), do: {IO.iodata_to_binary(acc) |> Token.new(:number), rest, false}
-
-  @spec read_until_open(String.t(), iodata()) ::
-          {Token.t(), rest :: String.t(), opened :: boolean()}
-  defp read_until_open(<<"{{", _::binary>> = input, acc),
-    do: {IO.iodata_to_binary(acc) |> Token.new(:ident), input, true}
-
+  @spec read_until_open(String.t(), iodata()) :: {Token.t(), rest :: String.t(), opened :: boolean()}
+  defp read_until_open(<<"{{", _::binary>> = input, acc), do: {IO.iodata_to_binary(acc) |> Token.new(:ident), input, true}
   defp read_until_open(<<c::8, rest::binary>>, acc), do: read_until_open(rest, acc <> <<c>>)
-
-  defp read_until_open(<<>>, acc),
-    do: {IO.iodata_to_binary(acc) |> Token.new(:ident), <<>>, false}
+  defp read_until_open(<<>>, acc), do: {IO.iodata_to_binary(acc) |> Token.new(:ident), <<>>, false}
 end
