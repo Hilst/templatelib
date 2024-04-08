@@ -4,8 +4,6 @@ defmodule Templatelib.Lexer do
 
   run_lexer(String.t()) -> [Token.t()]
   """
-  alias Templatelib.Types.Token
-
   defguardp is_whitespace(c) when c in ~c[ \n\t]
 
   defguardp is_letter(c)
@@ -30,7 +28,8 @@ defmodule Templatelib.Lexer do
         ) ::
           {[Token.t()], rest :: String.t(), inside_deleimiter :: boolean()}
   def next(input, next_type \\ :pop, inside_delimiter \\ false, n \\ 1)
-      when is_binary(input) and is_next_type(next_type) and is_integer(n),
+      when is_binary(input) and is_next_type(next_type) and is_boolean(inside_delimiter) and
+             is_integer(n),
       do: next(input, next_type, n, [], input, inside_delimiter)
 
   # NEXT CALC
