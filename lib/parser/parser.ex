@@ -4,6 +4,7 @@ defmodule Templatelib.Parser do
   """
   require Token
   require NodeData
+  require IEx
   alias NodeData
   alias Templatelib.Lexer
   alias NaryTree
@@ -53,20 +54,20 @@ defmodule Templatelib.Parser do
 
   defp handle({tokens, rest, true}, ast, parent_id) do
     {tokens, rest, inside} = lex_until_end_expression(rest, tokens, true)
+    ast = create_function_node(tokens, ast, parent_id)
 
-    if inside do
-      ast = create_function_node(tokens, ast, parent_id)
-      parse({rest, :pop, inside}, ast, NaryTree.get(ast, parent_id))
-    else
-      # parent :: :expression
-      parent =
-        NaryTree.get(ast, parent_id)
-        # parent parent :: :block
-        |> NaryTree.parent(ast)
+    parent_id =
+      if !inside do
+        parent =
+          NaryTree.get(ast, parent_id)
+          |> NaryTree.parent(ast)
 
-      parent_id = parent.id
-      parse({rest, :pop, inside}, ast, NaryTree.get(ast, parent_id))
-    end
+        parent.id
+      else
+        parent_id
+      end
+
+    parse({rest, :pop, inside}, ast, NaryTree.get(ast, parent_id))
   end
 
   @spec lex_until_end_expression(String.t(), [Token.t()], boolean()) ::
@@ -105,14 +106,12 @@ defmodule Templatelib.Parser do
 
   defp create_params([last | _ = []], ast, %NaryTree.Node{content: data})
        when (NodeData.is_node_data_type(data, :function) and Token.is_of_type(last, :pipe)) or
-              Token.is_of_type(last, :ldsquirly) do
-    ast
-  end
+              Token.is_of_type(last, :ldsquirly),
+       do: ast
 
   defp create_params([last | paramsTks], ast, node)
-       when Token.is_of_type(last, :pipe) or Token.is_of_type(last, :ldsquirly) do
-    create_params(paramsTks, ast, node)
-  end
+       when Token.is_of_type(last, :pipe) or Token.is_of_type(last, :rdsquirly),
+       do: create_params(paramsTks, ast, node)
 
   defp create_params(paramsTks, ast, %NaryTree.Node{id: parent_id, content: data})
        when NodeData.is_node_data_type(data, :function) do
@@ -124,7 +123,10 @@ defmodule Templatelib.Parser do
     create_params(paramsTks, ast, paramsBlockNode)
   end
 
-  defp create_params([value, equal, key | tokens], ast, %NaryTree.Node{id: parent_id, content: data})
+  defp create_params([value, equal, key | tokens], ast, %NaryTree.Node{
+         id: parent_id,
+         content: data
+       })
        when Token.is_of_type(equal, :equal) and NodeData.is_node_data_type(data, :parameter_block) do
     keyNode =
       NodeData.new(key, :parameter_name)
@@ -139,24 +141,28 @@ defmodule Templatelib.Parser do
     ast = NaryTree.add_child(ast, valueNode, parent_id)
 
     ast = NaryTree.add_child(ast, valueNode, parent_id)
+
     parent =
       NaryTree.get(ast, parent_id)
       |> NaryTree.parent(ast)
+
     create_params(tokens, ast, parent)
   end
 
   defp create_params([value | tokens], ast, %NaryTree.Node{id: parent_id, content: data})
-    when NodeData.is_node_data_type(data, :parameter_block)  do
+       when NodeData.is_node_data_type(data, :parameter_block) do
     valueNode =
       NodeData.new(value, :parameter_value)
       |> create_node()
 
     ast = NaryTree.add_child(ast, valueNode, parent_id)
+
     parent =
       NaryTree.get(ast, parent_id)
       |> NaryTree.parent(ast)
+
     create_params(tokens, ast, parent)
-    end
+  end
 
   @spec create_node(NodeData.t()) :: tree_node()
   defp create_node(data), do: Node.new("#{data}", data)

@@ -1,6 +1,7 @@
 defmodule LexerTest do
   alias Templatelib.Lexer
-  alias Templatelib.Types.Token
+  require Lexer
+  require Token
   use ExUnit.Case, async: true
 
   doctest Templatelib.Lexer
