@@ -1,0 +1,3 @@
+%{
+  "nary_tree": {:hex, :nary_tree, "0.1.1", "3ed1244005e2a97c4bb0440eda91733575f565d8df6be1399428a16cb9d15a74", [:mix], [], "hexpm", "c405483f801913946516013eff8692e8c6fbda6e310cda8db60441e22fd2541d"},
+}
