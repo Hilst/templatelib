@@ -10,8 +10,8 @@ defmodule Templatelib.Parser do
   alias NaryTree
   alias NaryTree.Node
 
-  @typep tree :: NaryTree.t()
-  @typep tree_node :: Node.t()
+  @type tree :: NaryTree.t()
+  @type tree_node :: Node.t()
 
   @typep lex_in :: {String.t(), Lexer.next_type(), boolean()}
   @typep lex_out :: {[Token.t()], String.t(), boolean()}
